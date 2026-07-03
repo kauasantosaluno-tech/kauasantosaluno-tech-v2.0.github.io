@@ -28,7 +28,6 @@ function fileEmoji(ext) {
 // ── Auth state ────────────────────────────────────────────
 let TOKEN = '';
 let REPO  = '';
-let DEFAULT_BRANCH = 'main';
 
 function loadAuth() {
   TOKEN = localStorage.getItem('acervo_token') || '';
@@ -141,102 +140,32 @@ async function writePosts(posts) {
   });
 }
 
-// ── Git Data API (blobs/trees/commits) ─────────────────────
-// The Contents API (ghPut above) only reliably accepts files up to ~1MB.
-// For anything bigger (a normal PDF, DOCX or PPTX easily crosses that),
-// GitHub returns a 422 "file too large" and the Contents API upload fails.
-// To support files up to 100MB we build the commit manually instead.
-
-async function ghApi(method, path, body) {
-  const r = await fetch(`https://api.github.com/repos/${REPO}/${path}`, {
-    method,
-    headers: {
-      Authorization: `token ${TOKEN}`,
-      Accept: 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json'
-    },
-    ...(body ? { body: JSON.stringify(body) } : {})
-  });
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({}));
-    throw new Error(err.message || `GitHub ${r.status}`);
-  }
-  return r.json();
-}
-
-async function getBranchHeadSHA(branch) {
-  const ref = await ghApi('GET', `git/ref/heads/${branch}`);
-  return ref.object.sha;
-}
-
-async function createBlob(base64) {
-  const blob = await ghApi('POST', 'git/blobs', { content: base64, encoding: 'base64' });
-  return blob.sha;
-}
-
-async function createTreeWithFile(baseCommitSha, filePath, blobSha) {
-  const baseCommit = await ghApi('GET', `git/commits/${baseCommitSha}`);
-  const tree = await ghApi('POST', 'git/trees', {
-    base_tree: baseCommit.tree.sha,
-    tree: [{ path: filePath, mode: '100644', type: 'blob', sha: blobSha }]
-  });
-  return tree.sha;
-}
-
-async function commitAndUpdateRef(branch, parentSha, treeSha, message) {
-  const commit = await ghApi('POST', 'git/commits', {
-    message,
-    tree: treeSha,
-    parents: [parentSha]
-  });
-  await ghApi('PATCH', `git/refs/heads/${branch}`, { sha: commit.sha, force: false });
-  return commit.sha;
-}
-
-// Upload a file to uploads/<folder>/<filename> via the Git Data API,
-// so files well over 1MB (PDFs, DOCX, PPTX, etc.) work correctly.
+// Upload a file to uploads/<folder>/<filename>
 async function uploadFile(file, folder, filename, onProgress) {
-  const MAX_SIZE = 95 * 1024 * 1024; // GitHub's blob endpoint caps around 100MB
-  if (file.size > MAX_SIZE) {
-    throw new Error(`Arquivo maior que 95MB (${formatSize(file.size)}). O GitHub não aceita arquivos desse tamanho por esta via.`);
-  }
-
-  const base64 = await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = e => resolve(e.target.result.split(',')[1]);
+    reader.onload = async (e) => {
+      try {
+        const base64 = e.target.result.split(',')[1];
+        const ghPath = folder ? `uploads/${folder}/${filename}` : `uploads/${filename}`;
+        const sha = await getFileSHA(ghPath);
+
+        onProgress(60);
+        await ghPut(ghPath, {
+          message: `upload: ${filename}`,
+          content: base64,
+          ...(sha ? { sha } : {})
+        });
+        onProgress(100);
+        resolve(ghPath);
+      } catch(err) {
+        reject(err);
+      }
+    };
     reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
     reader.readAsDataURL(file);
+    onProgress(20);
   });
-  onProgress(15);
-
-  const ghPath = folder ? `uploads/${folder}/${filename}` : `uploads/${filename}`;
-
-  try {
-    const blobSha = await createBlob(base64);
-    onProgress(45);
-
-    const headSha = await getBranchHeadSHA(DEFAULT_BRANCH);
-    const treeSha = await createTreeWithFile(headSha, ghPath, blobSha);
-    onProgress(75);
-
-    await commitAndUpdateRef(DEFAULT_BRANCH, headSha, treeSha, `upload: ${filename}`);
-    onProgress(100);
-    return ghPath;
-  } catch (err) {
-    let msg = err.message || 'Erro desconhecido';
-    if (msg.includes('too large') || msg.includes('422')) {
-      msg = 'Arquivo grande demais para o GitHub aceitar por esta via.';
-    } else if (msg.includes('409') || msg.toLowerCase().includes('conflict')) {
-      msg = 'Conflito ao salvar (outro upload em andamento). Tente novamente.';
-    } else if (msg.includes('404')) {
-      msg = 'Branch ou repositório não encontrado. Verifique o nome do repositório.';
-    } else if (msg.includes('401') || msg.includes('Bad credentials')) {
-      msg = 'Token inválido ou expirado.';
-    } else if (msg.includes('403')) {
-      msg = 'Sem permissão suficiente. O token precisa da permissão "repo".';
-    }
-    throw new Error(msg);
-  }
 }
 
 // ── Posts state ───────────────────────────────────────────
@@ -262,8 +191,7 @@ $('btnAuth').addEventListener('click', async () => {
   try {
     TOKEN = token;
     REPO  = repo;
-    const repoData = await ghGet('__repo__'); // testa acesso ao repositório
-    DEFAULT_BRANCH = repoData.default_branch || 'main';
+    await ghGet('__repo__'); // testa acesso ao repositório
     saveAuth(token, repo);
     showAdminPanel();
   } catch(e) {
@@ -303,12 +231,6 @@ async function showAdminPanel() {
   $('authGate').style.display = 'none';
   $('adminPanel').style.display = 'block';
   $('footerYear').textContent = new Date().getFullYear();
-  if (!DEFAULT_BRANCH || DEFAULT_BRANCH === 'main') {
-    try {
-      const repoData = await ghGet('__repo__');
-      DEFAULT_BRANCH = repoData.default_branch || 'main';
-    } catch { /* fica com 'main' como fallback */ }
-  }
   posts = await fetchPosts();
   renderList();
   populateFolderSuggestions();
@@ -383,11 +305,10 @@ $('btnUpload').addEventListener('click', async () => {
     return;
   }
 
+  // Folder: use input value or derive from title
   const folderRaw = $('postFolder').value.trim() || slugify(title);
   const folder = slugify(folderRaw);
   const description = $('postDesc').value.trim();
-  const tags = ($('postTags') ? $('postTags').value.trim() : '')
-    .split(',').map(t => t.trim()).filter(Boolean);
 
   $('btnUpload').disabled = true;
   status.innerHTML = '';
@@ -422,7 +343,6 @@ $('btnUpload').addEventListener('click', async () => {
         filename,
         ext,
         size: file.size,
-        tags,
         date: new Date().toISOString(),
       };
       results.push(post);
@@ -451,7 +371,6 @@ $('btnUpload').addEventListener('click', async () => {
       $('postTitle').value = '';
       $('postFolder').value = '';
       $('postDesc').value = '';
-      if ($('postTags')) $('postTags').value = '';
     } catch(err) {
       status.innerHTML = `<div class="notice error">Arquivos enviados mas falha ao atualizar posts.json: ${err.message}</div>`;
     }

@@ -2,11 +2,10 @@
 const $ = id => document.getElementById(id);
 
 function fileCategory(ext) {
-  if (ext === 'pdf') return 'pdf';
+  if (['pdf'].includes(ext)) return 'pdf';
   if (['png','jpg','jpeg','gif','webp','svg','bmp','avif'].includes(ext)) return 'image';
-  if (['py','pyw'].includes(ext)) return 'python';
   if (['doc','docx','odt','rtf'].includes(ext)) return 'doc';
-  if (['txt','md','csv','json','xml','html','htm','js','ts','css'].includes(ext)) return 'text';
+  if (['txt','md','csv','json','xml','html','htm'].includes(ext)) return 'text';
   if (['xls','xlsx','ods'].includes(ext)) return 'sheet';
   if (['ppt','pptx'].includes(ext)) return 'slide';
   return 'other';
@@ -15,12 +14,11 @@ function fileCategory(ext) {
 function fileEmoji(ext) {
   const map = {
     pdf:'📄', doc:'📝', docx:'📝', odt:'📝', rtf:'📝',
-    txt:'📃', md:'📃', py:'🐍', pyw:'🐍',
+    txt:'📃', md:'📃',
     png:'🖼️', jpg:'🖼️', jpeg:'🖼️', gif:'🖼️', webp:'🖼️', svg:'🖼️', avif:'🖼️',
     csv:'📊', xls:'📊', xlsx:'📊', ods:'📊',
     ppt:'📽️', pptx:'📽️',
     json:'📦', xml:'📦', zip:'🗜️', rar:'🗜️',
-    js:'⚙️', ts:'⚙️', css:'🎨', html:'🌐',
     mp3:'🎵', mp4:'🎬', mov:'🎬',
   };
   return map[ext] || '📎';
@@ -38,36 +36,14 @@ function formatSize(bytes) {
 }
 
 function buildPath(post) {
-  return post.folder ? `uploads/${post.folder}/${post.filename}` : `uploads/${post.filename}`;
-}
-
-// ── Syntax highlight (lightweight, no deps) ───────────────
-function highlightPython(code) {
-  const esc = code
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-  return esc
-    // strings (single + double + triple)
-    .replace(/("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g,
-      '<span class="hl-str">$1</span>')
-    // comments
-    .replace(/(#[^\n]*)/g, '<span class="hl-cmt">$1</span>')
-    // keywords
-    .replace(/\b(def|class|return|import|from|as|if|elif|else|for|while|in|not|and|or|is|None|True|False|try|except|finally|with|raise|pass|break|continue|lambda|yield|global|nonlocal|del|assert|async|await)\b/g,
-      '<span class="hl-kw">$1</span>')
-    // built-ins
-    .replace(/\b(print|len|range|type|int|float|str|list|dict|set|tuple|bool|open|input|enumerate|zip|map|filter|sorted|reversed|sum|min|max|abs|round|format|repr|isinstance|hasattr|getattr|setattr)\b/g,
-      '<span class="hl-builtin">$1</span>')
-    // decorators
-    .replace(/(@\w+)/g, '<span class="hl-dec">$1</span>')
-    // numbers
-    .replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-num">$1</span>');
+  if (post.folder) return `uploads/${post.folder}/${post.filename}`;
+  return `uploads/${post.filename}`;
 }
 
 // ── State ─────────────────────────────────────────────────
 let allPosts = [];
-let currentView = 'grid';
-let searchQuery = '';
+let currentView = 'grid'; // 'grid' | 'list'
+let currentFilter = 'all';
 
 // ── Load ──────────────────────────────────────────────────
 async function loadPosts() {
@@ -78,145 +54,129 @@ async function loadPosts() {
   } catch {
     allPosts = [];
   }
+  buildFilterButtons();
   render();
   $('footerYear').textContent = new Date().getFullYear();
 }
 
-// ── Search wiring ──────────────────────────────────────────
-const searchInput = $('searchInput');
-const searchClear = $('searchClear');
+// ── Build filter buttons from existing folders ─────────────
+function buildFilterButtons() {
+  const bar = $('filterBar');
+  const folders = [...new Set(allPosts.map(p => p.folder || 'Sem pasta').filter(Boolean))];
 
-searchInput.addEventListener('input', () => {
-  searchQuery = searchInput.value.trim().toLowerCase();
-  searchClear.style.display = searchQuery ? 'flex' : 'none';
-  render();
-});
+  bar.innerHTML = `<button class="filter-btn active" data-filter="all">Todos</button>`;
+  folders.forEach(folder => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn';
+    btn.dataset.filter = folder;
+    btn.textContent = folder.replace(/-/g, ' ');
+    bar.appendChild(btn);
+  });
 
-searchClear.addEventListener('click', () => {
-  searchInput.value = '';
-  searchQuery = '';
-  searchClear.style.display = 'none';
-  searchInput.focus();
-  render();
-});
+  bar.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      bar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      render();
+    });
+  });
+}
 
 // ── Render ────────────────────────────────────────────────
 function render() {
-  const container = $('postsView');
+  const container = $('foldersView');
   const empty = $('emptyState');
 
-  // Filter by search query — matches title, description, folder, filename, ext
-  function postMatches(p) {
-    if (!searchQuery) return true;
-    const haystack = [p.title, p.description, p.folder, p.filename, p.ext]
-      .filter(Boolean).join(' ').toLowerCase();
-    return searchQuery.split(/\s+/).every(term => haystack.includes(term));
+  let filtered = currentFilter === 'all'
+    ? allPosts
+    : allPosts.filter(p => (p.folder || 'Sem pasta') === currentFilter);
+
+  if (filtered.length === 0) {
+    container.innerHTML = '';
+    empty.style.display = 'block';
+    return;
   }
+  empty.style.display = 'none';
 
-  let posts = allPosts.filter(postMatches);
-
-  // Group by folder (project)
+  // Group by folder
   const groups = {};
-  posts.forEach(post => {
+  filtered.forEach(post => {
     const key = post.folder || 'Sem pasta';
     if (!groups[key]) groups[key] = [];
     groups[key].push(post);
   });
 
-  if (posts.length === 0) {
-    container.innerHTML = '';
-    empty.style.display = 'block';
-    empty.innerHTML = searchQuery
-      ? `Nenhum resultado para "<strong>${searchQuery}</strong>".<br><a href="#" id="clearSearch">Limpar busca →</a>`
-      : `Nenhuma publicação ainda.<br><a href="admin/index.html">Adicionar no painel admin →</a>`;
-    if (searchQuery) {
-      document.getElementById('clearSearch')?.addEventListener('click', e => {
-        e.preventDefault();
-        searchInput.value = '';
-        searchQuery = '';
-        searchClear.style.display = 'none';
-        render();
-      });
-    }
-    return;
-  }
-  empty.style.display = 'none';
+  container.innerHTML = Object.entries(groups).map(([folder, posts]) =>
+    folderGroupHTML(folder, posts)
+  ).join('');
 
-  if (currentView === 'list') {
-    container.className = 'posts-list-outer';
-    container.innerHTML = Object.entries(groups).map(([folder, items]) => `
-      <div class="project-list-group">
-        <div class="project-list-header">
-          <span class="project-list-icon">📁</span>
-          <span class="project-list-name">${folder.replace(/-/g, ' ')}</span>
-          <span class="project-count-badge">${items.length}</span>
-        </div>
-        ${items.map(listItemHTML).join('')}
-      </div>`).join('');
-  } else {
-    // Grid: unified masonry-style, each project is a card group
-    container.className = 'projects-grid';
-    container.innerHTML = Object.entries(groups).map(([folder, items]) =>
-      projectCardHTML(folder, items)
-    ).join('');
-  }
-
-  // Events
+  // Click events
   container.querySelectorAll('[data-slug]').forEach(el => {
     el.addEventListener('click', () => {
-      openModal(allPosts.find(p => p.slug === el.dataset.slug));
+      const slug = el.dataset.slug;
+      openModal(allPosts.find(p => p.slug === slug));
     });
   });
 
-  // Hover preview: flip + lazy load
-  container.querySelectorAll('.file-card').forEach(card => {
+  // Popover: flip to left when near right edge, load text lazily
+  container.querySelectorAll('.post-card').forEach(card => {
     card.addEventListener('mouseenter', () => {
       const pop = card.querySelector('.card-preview-pop');
       if (!pop) return;
-      const rect = card.getBoundingClientRect();
-      pop.classList.toggle('flip-left', (window.innerWidth - rect.right) < 320);
 
+      // Flip check
+      const rect = card.getBoundingClientRect();
+      const spaceRight = window.innerWidth - rect.right;
+      if (spaceRight < 320) {
+        pop.classList.add('flip-left');
+      } else {
+        pop.classList.remove('flip-left');
+      }
+
+      // Lazy load text previews
       const pre = pop.querySelector('pre[data-src]');
-      if (pre && pre.dataset.loaded !== 'true') {
-        pre.dataset.loaded = 'true';
+      if (pre && pre.textContent === 'Carregando…') {
         fetch(pre.dataset.src)
           .then(r => r.text())
-          .then(t => {
-            const cat = pre.dataset.cat;
-            if (cat === 'python') {
-              pre.innerHTML = highlightPython(t.slice(0, 1500));
-            } else {
-              pre.textContent = t.slice(0, 1500);
-            }
-          })
+          .then(t => { pre.textContent = t.slice(0, 1200); })
           .catch(() => { pre.textContent = '(erro ao carregar)'; });
       }
     });
   });
 }
 
-// ── Project card (grid mode) ───────────────────────────────
-function projectCardHTML(folder, posts) {
-  return `
-  <div class="project-card">
-    <div class="project-card-header">
-      <div class="project-card-icon">📁</div>
-      <div class="project-card-meta">
-        <span class="project-card-name">${folder.replace(/-/g, ' ')}</span>
-        <span class="project-card-count">${posts.length} arquivo${posts.length !== 1 ? 's' : ''}</span>
+function folderGroupHTML(folder, posts) {
+  if (currentView === 'list') {
+    return `
+    <div class="folder-group" style="grid-column: 1 / -1">
+      <div class="folder-header">
+        <div class="folder-icon">📁</div>
+        <span class="folder-name">${folder.replace(/-/g, ' ')}</span>
+        <span class="folder-count">${posts.length} arquivo${posts.length !== 1 ? 's' : ''}</span>
       </div>
+      <div style="padding:8px">
+        <div class="posts-list">${posts.map(listItemHTML).join('')}</div>
+      </div>
+    </div>`;
+  }
+
+  return `
+  <div class="folder-group">
+    <div class="folder-header">
+      <div class="folder-icon">📁</div>
+      <span class="folder-name">${folder.replace(/-/g, ' ')}</span>
+      <span class="folder-count">${posts.length}</span>
     </div>
-    <div class="project-files">
-      ${posts.map(fileCardHTML).join('')}
-    </div>
+    <div class="posts-grid">${posts.map(cardHTML).join('')}</div>
   </div>`;
 }
 
-// ── File card (inside project card) ───────────────────────
-function fileCardHTML(post) {
+function cardHTML(post) {
   const cat = fileCategory(post.ext);
   const path = buildPath(post);
 
+  // Thumbnail inside card
   let thumb;
   if (cat === 'image') {
     thumb = `<img src="${path}" alt="${post.title}" loading="lazy" />`;
@@ -228,16 +188,14 @@ function fileCardHTML(post) {
       </div>`;
   }
 
-  // Popover content
+  // Popover preview content
   let popContent;
   if (cat === 'pdf') {
     popContent = `<iframe src="${path}#toolbar=0&navpanes=0&scrollbar=0&view=FitH" loading="lazy"></iframe>`;
   } else if (cat === 'image') {
     popContent = `<img src="${path}" alt="${post.title}" loading="lazy" />`;
-  } else if (cat === 'python') {
-    popContent = `<pre class="py-preview" data-src="${path}" data-cat="python" data-loaded="false">Carregando…</pre>`;
   } else if (cat === 'text') {
-    popContent = `<pre data-src="${path}" data-cat="text" data-loaded="false">Carregando…</pre>`;
+    popContent = `<pre data-src="${path}">Carregando…</pre>`;
   } else {
     popContent = `
       <div class="pop-no-preview">
@@ -248,7 +206,7 @@ function fileCardHTML(post) {
   }
 
   return `
-  <div class="file-card" data-slug="${post.slug}">
+  <div class="post-card" data-slug="${post.slug}">
     <div class="card-thumb">${thumb}</div>
     <div class="card-body">
       <div class="card-title" title="${post.title}">${post.title}</div>
@@ -267,7 +225,6 @@ function fileCardHTML(post) {
   </div>`;
 }
 
-// ── List item ──────────────────────────────────────────────
 function listItemHTML(post) {
   return `
   <div class="list-item" data-slug="${post.slug}">
@@ -297,18 +254,12 @@ function openModal(post) {
   const cat = fileCategory(post.ext);
 
   $('modalTitleText').textContent = post.title;
-  const body = $('modalBody');
 
+  const body = $('modalBody');
   if (cat === 'image') {
     body.innerHTML = `<img src="${path}" alt="${post.title}" />`;
   } else if (cat === 'pdf') {
     body.innerHTML = `<iframe src="${path}" title="${post.title}"></iframe>`;
-  } else if (cat === 'python') {
-    body.innerHTML = `<div class="text-viewer py-modal-viewer" id="textContent"><span style="color:var(--muted)">Carregando…</span></div>`;
-    fetch(path).then(r => r.text()).then(t => {
-      const el = document.getElementById('textContent');
-      if (el) el.innerHTML = highlightPython(t);
-    });
   } else if (cat === 'text') {
     body.innerHTML = `<div class="text-viewer" id="textContent">Carregando…</div>`;
     fetch(path).then(r => r.text()).then(t => {
@@ -337,4 +288,5 @@ $('modalClose').addEventListener('click', () => $('modalOverlay').classList.remo
 $('modalOverlay').addEventListener('click', e => { if (e.target === $('modalOverlay')) $('modalOverlay').classList.remove('open'); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('modalOverlay').classList.remove('open'); });
 
+// ── Boot ──────────────────────────────────────────────────
 loadPosts();

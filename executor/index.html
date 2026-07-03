@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Executor Python — Portifólio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Syne:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <script src="../assets/js/theme.js"></script>
+  <style>
+    /* ── Editor tokens ───────────────────────────────────── */
+    :root {
+      --editor-bg:      #1E1E2E;
+      --editor-surface: #252535;
+      --editor-border:  #383850;
+      --editor-text:    #CDD6F4;
+      --editor-muted:   #6C7086;
+      --editor-accent:  #89B4FA;
+      --editor-green:   #A6E3A1;
+      --editor-red:     #F38BA8;
+      --editor-yellow:  #F9E2AF;
+      --editor-line-hi: #2A2A3E;
+    }
+
+    /* Light mode — editor fica mais claro */
+    [data-theme="light"] {
+      --editor-bg:      #1A1A2E;
+      --editor-surface: #16213E;
+      --editor-border:  #0F3460;
+      --editor-text:    #E2E8F0;
+      --editor-muted:   #718096;
+      --editor-accent:  #90CDF4;
+      --editor-green:   #9AE6B4;
+      --editor-red:     #FC8181;
+      --editor-yellow:  #FAF089;
+      --editor-line-hi: #2D3748;
+    }
+
+    /* ── Layout ──────────────────────────────────────────── */
+    .executor-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: var(--surface-2);
+    }
+    .panel-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-2);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      letter-spacing: .01em;
+    }
+    .panel-title svg { opacity: .7; }
+
+    /* ── Drop zone ───────────────────────────────────────── */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 28px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .15s;
+      background: var(--surface-2);
+      margin: 16px;
+    }
+    .drop-zone:hover, .drop-zone.over {
+      border-color: var(--accent);
+      background: var(--accent-lt);
+    }
+    .drop-zone svg { color: var(--muted); margin-bottom: 10px; transition: color .15s; }
+    .drop-zone:hover svg, .drop-zone.over svg { color: var(--accent); }
+    .drop-zone p { font-size: 13px; color: var(--text-2); }
+    .drop-zone span { font-size: 11px; color: var(--muted); display: block; margin-top: 4px; }
+
+    .file-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--success-lt);
+      border: 1px solid #bbf7d0;
+      color: var(--success);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      margin: 0 16px 16px;
+    }
+    .file-pill button {
+      background: none; border: none; cursor: pointer;
+      color: var(--success); font-size: 14px; line-height: 1; padding: 0;
+      opacity: .7; transition: opacity .15s;
+    }
+    .file-pill button:hover { opacity: 1; }
+
+    /* ── Code editor ─────────────────────────────────────── */
+    .editor-area {
+      background: var(--editor-bg);
+      position: relative;
+    }
+    .editor-toolbar {
+      background: var(--editor-surface);
+      border-bottom: 1px solid var(--editor-border);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .editor-lang {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--editor-accent);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .editor-hint {
+      font-size: 11px;
+      color: var(--editor-muted);
+    }
+    .editor-hint code {
+      background: var(--editor-line-hi);
+      color: var(--editor-yellow);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+    #codeInput {
+      width: 100%;
+      min-height: 320px;
+      max-height: 520px;
+      background: var(--editor-bg);
+      color: var(--editor-text);
+      border: none;
+      outline: none;
+      padding: 16px 18px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      line-height: 1.75;
+      resize: vertical;
+      display: block;
+      tab-size: 4;
+    }
+    #codeInput::selection { background: #3D59A1; }
+    #codeInput::placeholder { color: var(--editor-muted); }
+
+    /* ── Snippets ─────────────────────────────────────────── */
+    .snippets-wrap {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      background: var(--surface-2);
+    }
+    .snippets-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .snippets-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .snippet-btn {
+      padding: 4px 11px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--surface);
+      color: var(--text-2);
+      font-size: 11px;
+      font-family: var(--font-body);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .snippet-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-lt);
+    }
+
+    /* ── Run button ──────────────────────────────────────── */
+    .run-bar {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-run {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 22px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-body);
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-run:hover { background: var(--accent-hover); }
+    .btn-run:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-run svg { transition: transform .2s; }
+    .btn-run:not(:disabled):hover svg { transform: scale(1.1); }
+    .btn-clear-out {
+      padding: 8px 14px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-family: var(--font-body);
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-clear-out:hover { border-color: var(--border-strong); color: var(--text); }
+    .run-status {
+      font-size: 12px;
+      color: var(--muted);
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--border-strong);
+      flex-shrink: 0;
+    }
+    .status-dot.running { background: #F59E0B; animation: blink .8s infinite; }
+    .status-dot.ok      { background: var(--success); }
+    .status-dot.err     { background: var(--danger); }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+    /* ── Output ──────────────────────────────────────────── */
+    .output-body {
+      min-height: 200px;
+      max-height: 480px;
+      overflow-y: auto;
+      padding: 16px 18px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 12.5px;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--editor-bg);
+      color: var(--editor-text);
+    }
+    .output-body.empty {
+      color: var(--editor-muted);
+      font-family: var(--font-body);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .output-body.error { color: var(--editor-red); }
+    .output-thinking {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--editor-muted);
+      font-family: var(--font-body);
+      font-size: 13px;
+    }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid var(--editor-border);
+      border-top-color: var(--editor-accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── API key section ─────────────────────────────────── */
+    .api-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .api-icon {
+      width: 36px; height: 36px;
+      background: var(--accent-lt);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .api-info { flex: 1; min-width: 200px; }
+    .api-info strong { font-size: 13px; display: block; margin-bottom: 2px; }
+    .api-info p { font-size: 12px; color: var(--muted); }
+    .api-info a { color: var(--accent); }
+    .api-key-input-wrap { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 220px; }
+    #apiKeyInput {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      transition: border-color .15s;
+    }
+    #apiKeyInput:focus { outline: none; border-color: var(--accent); }
+    .btn-save-key {
+      padding: 8px 14px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--font-body);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s;
+    }
+    .btn-save-key:hover { background: var(--accent-hover); }
+    .key-saved-badge {
+      display: none;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: var(--success);
+      font-weight: 500;
+    }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @media (max-width: 780px) {
+      .executor-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="../index.html" class="logo">
+        <span class="logo-icon">◈</span>
+        Portifólio
+      </a>
+      <nav style="display:flex;gap:12px;align-items:center">
+        <button class="theme-toggle" id="themeToggle" aria-label="Alternar tema">
+          <svg class="icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg class="icon-sun"  width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+        <a href="../index.html" class="nav-back">← Publicações</a>
+        <a href="../admin/index.html" class="nav-admin">Admin →</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <div class="hero-label">Ferramentas</div>
+      <h1>Executor Python</h1>
+      <p class="hero-sub">Carregue um arquivo, escreva código Python e execute — o resultado aparece ao lado.</p>
+    </section>
+
+    <!-- API Key -->
+    <div class="api-section" style="margin-bottom:20px" id="apiSection">
+      <div class="api-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+        </svg>
+      </div>
+      <div class="api-info">
+        <strong>Anthropic API Key</strong>
+        <p>Necessária para executar o código. Gere em <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> — fica salva só no seu navegador.</p>
+      </div>
+      <div class="api-key-input-wrap">
+        <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." />
+        <button class="btn-save-key" id="btnSaveKey">Salvar</button>
+        <span class="key-saved-badge" id="keySavedBadge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Salva
+        </span>
+      </div>
+    </div>
+
+    <!-- Main grid -->
+    <div class="executor-grid">
+
+      <!-- LEFT: Input -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+
+        <!-- File drop -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Arquivo
+            </span>
+          </div>
+
+          <div class="drop-zone" id="dropZone">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="display:block;margin:0 auto 10px">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+            </svg>
+            <p>Arraste um arquivo ou <strong style="color:var(--accent)">clique para selecionar</strong></p>
+            <span>PDF, TXT, CSV, DOCX, XLSX, JSON, imagens e outros</span>
+            <input type="file" id="fileInput" style="display:none" />
+          </div>
+
+          <div id="filePill" style="display:none;padding:0 16px 16px"></div>
+
+          <!-- File preview -->
+          <div id="filePreview" style="display:none;margin:0 16px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
+            <div style="background:var(--surface-2);padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Prévia do conteúdo</div>
+            <pre id="filePreviewText" style="margin:0;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.6;background:var(--bg);color:var(--text-2);white-space:pre-wrap;word-break:break-word;max-height:140px;overflow:auto"></pre>
+          </div>
+        </div>
+
+        <!-- Code editor -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              Código Python
+            </span>
+          </div>
+
+          <div class="editor-area">
+            <div class="editor-toolbar">
+              <span class="editor-lang">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14.25.18l.9.2.73.26.59.3.45.32.34.34.25.34.16.33.1.3.04.26.02.2-.01.13V8.5l-.05.63-.13.55-.21.46-.26.38-.3.31-.33.25-.35.19-.35.14-.33.1-.3.07-.26.04-.21.02H8.77l-.69.05-.59.14-.5.22-.41.27-.33.32-.27.35-.2.36-.15.37-.1.35-.07.32-.04.27-.02.21v3.06H3.17l-.21-.03-.28-.07-.32-.12-.35-.18-.36-.26-.36-.36-.35-.46-.32-.59-.28-.73-.21-.88-.14-1.05L0 11.97l.06-1.22.16-1.04.24-.87.32-.71.36-.57.4-.44.42-.33.42-.24.4-.16.36-.1.32-.05.26-.02.21-.01h5.74l.69-.05.59-.14.5-.22.41-.27.33-.32.27-.35.2-.36.15-.37.1-.35.07-.32.04-.27.02-.21V1.33l.01-.15.04-.26.1-.3.16-.33.25-.34.34-.34.45-.32.59-.3.73-.26.9-.2.97-.08.95.04zm-2.26 5.5a1.26 1.26 0 100 2.52 1.26 1.26 0 000-2.52z"/><path d="M9.75 23.82l-.9-.2-.73-.26-.59-.3-.45-.32-.34-.34-.25-.34-.16-.33-.1-.3-.04-.26-.02-.2.01-.13v-5.18l.05-.63.13-.55.21-.46.26-.38.3-.31.33-.25.35-.19.35-.14.33-.1.3-.07.26-.04.21-.02h5.62l.69-.05.59-.14.5-.22.41-.27.33-.32.27-.35.2-.36.15-.37.1-.35.07-.32.04-.27.02-.21V9.5h3.24l.21.03.28.07.32.12.35.18.36.26.36.36.35.46.32.59.28.73.21.88.14 1.05.05 1.23-.06 1.22-.16 1.04-.24.87-.32.71-.36.57-.4.44-.42.33-.42.24-.4.16-.36.1-.32.05-.26.02-.21.01H9.89l-.69.05-.59.14-.5.22-.41.27-.33.32-.27.35-.2.36-.15.37-.1.35-.07.32-.04.27-.02.21v2.93l-.01.15-.04.26-.1.3-.16.33-.25.34-.34.34-.45.32-.59.3-.73.26-.9.2-.97.08-.95-.04zm2.26-5.5a1.26 1.26 0 100-2.52 1.26 1.26 0 000 2.52z"/></svg>
+                Python
+              </span>
+              <span class="editor-hint">use <code>file_content</code> para acessar o arquivo</span>
+            </div>
+            <textarea id="codeInput" spellcheck="false"
+              placeholder="# Seu código Python aqui
+# file_content → texto extraído do arquivo carregado
+
+lines = file_content.splitlines()
+print(f'Total de linhas: {len(lines)}')
+print(f'Total de palavras: {len(file_content.split())}')
+print()
+print('Primeiras 5 linhas:')
+for i, l in enumerate(lines[:5], 1):
+    print(f'  {i}: {l}')"></textarea>
+          </div>
+
+          <div class="snippets-wrap">
+            <div class="snippets-label">Exemplos</div>
+            <div class="snippets-grid" id="snippetsGrid"></div>
+          </div>
+
+          <div class="run-bar">
+            <button class="btn-run" id="btnRun">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Executar
+            </button>
+            <button class="btn-clear-out" id="btnClearOutput">Limpar saída</button>
+            <span class="run-status" id="runStatus">
+              <span class="status-dot" id="statusDot"></span>
+              <span id="statusText">Pronto</span>
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT: Output -->
+      <div class="panel" style="position:sticky;top:70px">
+        <div class="panel-header">
+          <span class="panel-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            Saída
+          </span>
+          <button id="btnCopyOutput" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;padding:3px 6px;border-radius:4px;transition:background .15s" title="Copiar saída">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            Copiar
+          </button>
+        </div>
+        <div class="output-body empty" id="outputBody">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="opacity:.3;margin-bottom:4px"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          Execute o código para ver o resultado
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>Portifólio · <span id="footerYear"></span><br><small style="font-size:10px;opacity:.6">Criado por Kauã Lopes dos Santos</small></p>
+  </footer>
+
+  <script>
+    // ── Snippets ───────────────────────────────────────────
+    const SNIPPETS = [
+      {
+        label: 'Contar linhas e palavras',
+        code: `lines = file_content.splitlines()
+words = file_content.split()
+chars = len(file_content)
+
+print(f"Linhas:     {len(lines)}")
+print(f"Palavras:   {len(words)}")
+print(f"Caracteres: {chars}")
+print()
+print("Primeiras 5 linhas:")
+for i, l in enumerate(lines[:5], 1):
+    print(f"  {i}: {l}")`
+      },
+      {
+        label: 'Buscar palavra-chave',
+        code: `keyword = "erro"  # altere aqui
+
+matches = []
+for i, line in enumerate(file_content.splitlines(), 1):
+    if keyword.lower() in line.lower():
+        matches.append((i, line.strip()))
+
+print(f"Palavra-chave: '{keyword}'")
+print(f"Ocorrências:   {len(matches)}")
+print()
+for num, text in matches[:20]:
+    print(f"  linha {num}: {text}")`
+      },
+      {
+        label: 'Top 10 palavras',
+        code: `import re
+from collections import Counter
+
+words = re.findall(r'\\b[a-zA-ZÀ-ÿ]{4,}\\b', file_content.lower())
+top = Counter(words).most_common(10)
+
+print("Top 10 palavras mais frequentes:")
+print()
+for rank, (word, count) in enumerate(top, 1):
+    bar = "█" * min(count, 30)
+    print(f"  {rank:2}. {word:<20} {count:>4}x  {bar}")`
+      },
+      {
+        label: 'Analisar CSV',
+        code: `lines = [l for l in file_content.splitlines() if l.strip()]
+
+if not lines:
+    print("Arquivo vazio.")
+else:
+    headers = [h.strip() for h in lines[0].split(',')]
+    rows = lines[1:]
+    
+    print(f"Colunas ({len(headers)}):")
+    for h in headers:
+        print(f"  - {h}")
+    print()
+    print(f"Linhas de dados: {len(rows)}")
+    print()
+    print("Primeiras 3 linhas:")
+    for row in rows[:3]:
+        print(f"  {row}")`
+      },
+      {
+        label: 'Extrair e-mails',
+        code: `import re
+
+emails = re.findall(
+    r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}',
+    file_content
+)
+unique = sorted(set(emails))
+
+print(f"E-mails encontrados: {len(unique)}")
+print()
+for e in unique:
+    print(f"  {e}")`
+      },
+      {
+        label: 'Estatísticas de texto',
+        code: `import re
+
+sentences = re.split(r'[.!?]+', file_content)
+sentences = [s.strip() for s in sentences if s.strip()]
+paragraphs = [p for p in file_content.split('\\n\\n') if p.strip()]
+words = file_content.split()
+avg_word_len = sum(len(w) for w in words) / max(len(words), 1)
+
+print("=== Estatísticas do texto ===")
+print(f"Parágrafos:          {len(paragraphs)}")
+print(f"Frases:              {len(sentences)}")
+print(f"Palavras:            {len(words)}")
+print(f"Caracteres:          {len(file_content)}")
+print(f"Tamanho médio/palav: {avg_word_len:.1f} chars")
+if sentences:
+    avg_sent = len(words) / len(sentences)
+    print(f"Palavras por frase:  {avg_sent:.1f}")`
+      },
+    ];
+
+    const grid = document.getElementById('snippetsGrid');
+    SNIPPETS.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'snippet-btn';
+      btn.textContent = s.label;
+      btn.addEventListener('click', () => {
+        document.getElementById('codeInput').value = s.code;
+      });
+      grid.appendChild(btn);
+    });
+
+    // ── File handling ──────────────────────────────────────
+    let fileContent = '';
+    let fileName = '';
+
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('over');
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) handleFile(fileInput.files[0]);
+      fileInput.value = '';
+    });
+
+    async function handleFile(file) {
+      fileName = file.name;
+      const ext = file.name.split('.').pop().toLowerCase();
+
+      const imgExts = ['png','jpg','jpeg','gif','webp','bmp','avif','svg'];
+      if (imgExts.includes(ext)) {
+        fileContent = `[Imagem: ${file.name} — ${(file.size/1024).toFixed(1)} KB]\nTipo: imagem/${ext}\nO Claude analisará a imagem visualmente ao executar o código.`;
+      } else {
+        fileContent = await readFileAsText(file);
+      }
+
+      showFilePill(file);
+      showPreview();
+    }
+
+    function readFileAsText(file) {
+      return new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const text = e.target.result;
+          if (!text || (text.includes('\x00') && text.length < 100)) {
+            resolve(`[Arquivo binário: ${file.name} — ${(file.size/1024).toFixed(1)} KB]\nNão foi possível extrair texto diretamente.`);
+          } else {
+            resolve(text);
+          }
+        };
+        reader.onerror = () => resolve(`[Erro ao ler ${file.name}]`);
+        reader.readAsText(file, 'UTF-8');
+      });
+    }
+
+    function showFilePill(file) {
+      const pill = document.getElementById('filePill');
+      pill.style.display = 'block';
+      pill.innerHTML = `
+        <div class="file-pill">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          ${file.name}
+          <small style="opacity:.7">(${(file.size/1024).toFixed(1)} KB)</small>
+          <button onclick="clearFile()" aria-label="Remover">✕</button>
+        </div>`;
+      dropZone.style.display = 'none';
+    }
+
+    function showPreview() {
+      const preview = document.getElementById('filePreview');
+      const text = document.getElementById('filePreviewText');
+      const lines = fileContent.split('\n').slice(0, 10).join('\n');
+      text.textContent = lines + (fileContent.split('\n').length > 10 ? '\n…' : '');
+      preview.style.display = 'block';
+    }
+
+    function clearFile() {
+      fileContent = '';
+      fileName = '';
+      document.getElementById('filePill').style.display = 'none';
+      document.getElementById('filePreview').style.display = 'none';
+      dropZone.style.display = '';
+    }
+
+    // ── API Key ────────────────────────────────────────────
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const keySavedBadge = document.getElementById('keySavedBadge');
+
+    const savedKey = localStorage.getItem('acervo_apikey') || '';
+    if (savedKey) {
+      apiKeyInput.value = savedKey;
+      keySavedBadge.style.display = 'flex';
+    }
+
+    document.getElementById('btnSaveKey').addEventListener('click', () => {
+      const key = apiKeyInput.value.trim();
+      if (!key) return;
+      localStorage.setItem('acervo_apikey', key);
+      keySavedBadge.style.display = 'flex';
+    });
+
+    // ── Status ─────────────────────────────────────────────
+    function setStatus(state, text) {
+      const dot = document.getElementById('statusDot');
+      const label = document.getElementById('statusText');
+      dot.className = 'status-dot ' + state;
+      label.textContent = text;
+    }
+
+    // ── Run ────────────────────────────────────────────────
+    document.getElementById('btnRun').addEventListener('click', runCode);
+    document.getElementById('codeInput').addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runCode();
+    });
+
+    async function runCode() {
+      const code = document.getElementById('codeInput').value.trim();
+      const apiKey = localStorage.getItem('acervo_apikey') || apiKeyInput.value.trim();
+      const output = document.getElementById('outputBody');
+
+      if (!code) return;
+      if (!fileContent) {
+        output.className = 'output-body error';
+        output.textContent = 'Nenhum arquivo carregado.\nCarregue um arquivo antes de executar.';
+        return;
+      }
+      if (!apiKey) {
+        output.className = 'output-body error';
+        output.textContent = 'API Key não configurada.\nInsira sua Anthropic API Key acima e salve.';
+        return;
+      }
+
+      setStatus('running', 'Executando…');
+      document.getElementById('btnRun').disabled = true;
+      output.className = 'output-body';
+      output.innerHTML = `<div class="output-thinking"><div class="spinner"></div>Executando código…</div>`;
+
+      const systemPrompt = `Você é um executor de código Python preciso e fiel. Sua única função é simular a execução de código Python e retornar exatamente o que seria impresso no terminal.
+
+REGRAS ABSOLUTAS:
+- Responda APENAS com o output que o código produziria, sem nenhum texto extra
+- Se houver erro, mostre o traceback Python realista e completo
+- Se o código usar print(), mostre exatamente o que seria impresso
+- Não adicione explicações, comentários, blocos de código markdown ou qualquer outro texto
+- Se o código não produzir nenhum output, responda com uma linha vazia
+- A variável file_content já está definida com o conteúdo do arquivo
+- Simule bibliotecas padrão do Python (re, os, sys, collections, etc.) fielmente
+- Para bibliotecas de terceiros (pandas, numpy, etc.), simule o resultado de forma realista usando os dados reais do arquivo`;
+
+      const userPrompt = `Arquivo carregado: "${fileName}"
+
+Conteúdo do arquivo (variável file_content):
+"""
+${fileContent.slice(0, 8000)}${fileContent.length > 8000 ? '\n... [truncado]' : ''}
+"""
+
+Código Python a executar:
+\`\`\`python
+${code}
+\`\`\`
+
+Execute e retorne apenas o output do terminal.`;
+
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-allow-browser': 'true'
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 2000,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userPrompt }]
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          const msg = data.error?.message || `Erro ${res.status}`;
+          output.className = 'output-body error';
+          output.textContent = `Erro da API: ${msg}`;
+          setStatus('err', 'Erro');
+          return;
+        }
+
+        const result = data.content?.map(b => b.text || '').join('') || '(sem saída)';
+        output.className = 'output-body';
+        output.textContent = result;
+        setStatus('ok', 'Concluído');
+
+      } catch (err) {
+        output.className = 'output-body error';
+        output.textContent = `Falha na requisição: ${err.message}`;
+        setStatus('err', 'Erro');
+      } finally {
+        document.getElementById('btnRun').disabled = false;
+      }
+    }
+
+    // ── Clear output ───────────────────────────────────────
+    document.getElementById('btnClearOutput').addEventListener('click', () => {
+      const output = document.getElementById('outputBody');
+      output.className = 'output-body empty';
+      output.innerHTML = `
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="opacity:.3;margin-bottom:4px"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        Execute o código para ver o resultado`;
+      setStatus('idle', 'Pronto');
+      document.getElementById('statusDot').className = 'status-dot';
+    });
+
+    // ── Copy output ────────────────────────────────────────
+    document.getElementById('btnCopyOutput').addEventListener('click', () => {
+      const text = document.getElementById('outputBody').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('btnCopyOutput');
+        btn.style.color = 'var(--success)';
+        setTimeout(() => btn.style.color = '', 1500);
+      });
+    });
+
+    // ── Footer year ────────────────────────────────────────
+    document.getElementById('footerYear').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
